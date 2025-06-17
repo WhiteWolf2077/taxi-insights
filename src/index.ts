@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import Redis from 'ioredis';
 dotenv.config();
 
-import Groq from 'groq-sdk';
+import { callLLM } from './utils/llmClient';
 const app = express();
 const port = process.env.PORT || 3000;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
@@ -19,10 +19,6 @@ redisClient.on('connect', () => {
 
 redisClient.on('error', (err) => {
   console.error('Redis error:', err);
-});
-
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY
 });
 
 app.use(express.json());
@@ -87,27 +83,9 @@ Analyze the user's request and determine if any of the available tools are neede
 
   try {
     console.log('Sending message to Claude with prompt:', messages);
-    const chatCompletion = await groq.chat.completions.create({
-        messages: messages as any, // Type assertion might be needed depending on Groq SDK types
-        model: 'claude-3-5-sonnet-20240620',
-        tools: tools as any, // Pass tool definitions
-    });
+    const responseContent = await callLLM(messages as any); // Use callLLM
 
-    const responseContent = chatCompletion.choices[0]?.message?.content;
-    const toolCalls = chatCompletion.choices[0]?.message?.tool_calls;
-
-    if (toolCalls && toolCalls.length > 0) {
-        console.log("Claude suggested tool calls:", toolCalls);
-        // Process tool calls - for simplicity, execute the first one as a placeholder
-        const toolResult = await executeTool(toolCalls[0]);
-
-        // After tool execution, you might want to send the result back to Claude
-        // or formulate a response based on the tool's outcome.
-        // For this step, we'll just send a placeholder confirmation back to WhatsApp.
-         await sendWhatsAppMessage(message.from, "Executing your request..."); // Inform driver
-        // Then potentially call Claude again with tool results
-
-    } else if (responseContent) {
+    if (responseContent) {
         console.log('Claude provided a response:', responseContent);
         // Send Claude's response back to the user via WhatsApp
         await sendWhatsAppMessage(message.from, responseContent);
@@ -120,7 +98,7 @@ Analyze the user's request and determine if any of the available tools are neede
 
   } catch (error) {
     console.error('Error sending message to Claude:', error);
-    await sendWhatsAppMessage(message.from, "Sorry, there was an error processing your request.");
+    await sendWhatsAppMessage(message.from, "Sorry, there was an error processing your request with the AI.");
   }
 };
 
